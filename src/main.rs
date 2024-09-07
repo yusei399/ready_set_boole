@@ -2,6 +2,7 @@ mod instructions;
 
 use crate::instructions::adder::adder;
 use crate::instructions::multiplier::multiplier;
+use crate::instructions::gray_code::gray_code;
 
 fn main() {
     println!("Adder");
@@ -23,5 +24,12 @@ fn main() {
     println!("{}", multiplier(4_00000, 2_00000));
     println!("----------------------------------");
 
+    println!("Gray Code");
+    println!("{}", gray_code(0));
+    println!("{}", gray_code(1));
+    println!("{}", gray_code(2));
+    println!("{}", gray_code(3));
+    println!("{}", gray_code(4));
+    println!("{}", gray_code(5));
 
 }
