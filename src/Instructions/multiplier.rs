@@ -1,13 +1,18 @@
 use crate::instructions::adder::adder;
 
 pub fn multiplier(a: u32, b: u32) -> u32 {
-    if a == 0 || b == 0 {
-        return 0;
+    let mut factor = a;
+    let mut multiplier = b;
+    let mut result = 0;
+
+    while multiplier != 0 {
+        if multiplier & 1 != 0 {
+            result = adder(result, factor);
+        }
+        multiplier >>= 1;
+        factor <<= 1;
     }
-    if b == 1 {
-        return a;
-    }
-    adder(a, multiplier(a, b - 1))
+    result
 }
 
 #[cfg(test)]
