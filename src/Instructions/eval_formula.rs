@@ -34,5 +34,6 @@ func eval_formula(formula: &str) -> bool{
                 }
             }
         }
+        _ => panic!("Invalid token: {}", ch),
     }
 }
