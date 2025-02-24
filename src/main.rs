@@ -1,10 +1,12 @@
 mod instructions;
+mod rewrite_rules;
 
 use crate::instructions::adder::adder;
 use crate::instructions::multiplier::multiplier;
 use crate::instructions::gray_code::gray_code;
 use crate::instructions::evaluation::eval_formula;
 use crate::instructions::truth_table::print_truth_table;
+use crate::rewrite_rules::negation_normal_form::negation_normal_form;
 
 fn main() {
     println!("Adder");
@@ -92,4 +94,19 @@ fn main() {
 
     println!("Truth Table for expression \"AB&C|\" ((A AND B) OR C):");
     print_truth_table("AB&C|");
+
+    println!("--- Negation Normal Form Test in main() ---");
+
+    let formulas = [
+        ("AB&!", "A!B!|"),
+        ("AB|!", "A!B!&"),
+        ("AB>", "A!B|"),
+        ("AB=", "AB&A!B!&|"),
+        ("AB|C&!", "A!B!&C!|"),
+    ];
+
+    for (input, expected) in formulas.iter() {
+        let nnf = negation_normal_form(input);
+        println!("Input: {:<8} -> NNF: {:<12} (expected: {})", input, nnf, expected);
+    }
 }
