@@ -4,6 +4,8 @@ use crate::instructions::adder::adder;
 use crate::instructions::multiplier::multiplier;
 use crate::instructions::gray_code::gray_code;
 use crate::instructions::evaluation::eval_formula;
+use crate::instructions::truth_table::print_truth_table;
+
 fn main() {
     println!("Adder");
     println!("{}", adder(1, 2));
@@ -81,4 +83,13 @@ fn main() {
     println!("Test nested negation:");
     println!("eval_formula(\"1!!\") = {} (expected: true)", eval_formula("1!!"));
     println!("eval_formula(\"0!!\") = {} (expected: false)", eval_formula("0!!"));
+
+    println!("Truth Table for expression \"A\":");
+    print_truth_table("A");
+
+    println!("Truth Table for expression \"AB|\" (A OR B):");
+    print_truth_table("AB|");
+
+    println!("Truth Table for expression \"AB&C|\" ((A AND B) OR C):");
+    print_truth_table("AB&C|");
 }
