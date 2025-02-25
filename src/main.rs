@@ -7,6 +7,7 @@ use crate::instructions::gray_code::gray_code;
 use crate::instructions::evaluation::eval_formula;
 use crate::instructions::truth_table::print_truth_table;
 use crate::rewrite_rules::negation_normal_form::negation_normal_form;
+use crate::rewrite_rules::conjunctive_normal_form::conjunctive_normal_form;
 
 fn main() {
     println!("Adder");
@@ -109,4 +110,19 @@ fn main() {
         let nnf = negation_normal_form(input);
         println!("Input: {:<8} -> NNF: {:<12} (expected: {})", input, nnf, expected);
     }
+
+        println!("--- Conjunctive Normal Form Conversion ---");
+        let formulas = [
+            ("AB&!", "A!B!|"),
+            ("AB|!", "A!B!&"),
+            ("AB|C&", "AB|C&"),
+            ("AB|C|D|", "ABCD|||"),
+            ("AB&C&D&", "ABCD&&&"),
+            ("AB&!C!|", "A!B!C!||"),
+            ("AB|!C!&", "A!B!C!&&"),
+        ];
+        for (input, expected) in formulas.iter() {
+            let cnf = conjunctive_normal_form(input);
+            println!("Input: {:<10} -> CNF: {:<12} (expected: {})", input, cnf, expected);
+        }
 }
