@@ -8,7 +8,9 @@ use crate::instructions::evaluation::eval_formula;
 use crate::instructions::truth_table::print_truth_table;
 use crate::rewrite_rules::negation_normal_form::negation_normal_form;
 use crate::rewrite_rules::conjunctive_normal_form::conjunctive_normal_form;
-
+use crate::rewrite_rules::sat::sat;
+use crate::rewrite_rules::powerset::powerset;
+use crate::rewrite_rules::set_evaluation::eval_set;
 fn main() {
     println!("Adder");
     println!("{}", adder(1, 2));
@@ -125,4 +127,46 @@ fn main() {
             let cnf = conjunctive_normal_form(input);
             println!("Input: {:<10} -> CNF: {:<12} (expected: {})", input, cnf, expected);
         }
+
+    println!("--- SAT Tests from main ---");
+    println!("sat(\"1\") = {} (expected: true)", sat("1"));
+    println!("sat(\"0\") = {} (expected: false)", sat("0"));
+    println!("sat(\"1!\") = {} (expected: false)", sat("1!"));
+    println!("sat(\"0!\") = {} (expected: true)", sat("0!"));
+
+    println!("--- Powerset Tests in main() ---");
+
+    let test_sets = vec![
+        vec![],
+        vec![1],
+        vec![1, 2],
+        vec![1, 2, 3],
+    ];
+
+    for set in test_sets {
+        println!("Input set: {:?}", set);
+        let pset = powerset(set.clone());
+        println!("Powerset: {:?}", pset);
+        println!("-----------------------");
+    }
+
+    println!("--- eval_set Tests in main() ---");
+    
+    // Test 1: Intersection
+    let sets1 = vec![vec![0, 1, 2], vec![0, 3, 4]];
+    let result1 = eval_set("AB&", sets1.clone());
+    println!("Formula: \"AB&\", Sets: {:?} => Result: {:?}", sets1, result1);
+    
+    // Test 2: Union
+    let sets2 = vec![vec![0, 1, 2], vec![3, 4, 5]];
+    let result2 = eval_set("AB|", sets2.clone());
+    println!("Formula: \"AB|\", Sets: {:?} => Result: {:?}", sets2, result2);
+    
+    // Test 3: Complement of A = [0,1,2]
+    let sets3 = vec![vec![0, 1, 2]];
+    let result3 = eval_set("A!", sets3.clone());
+    println!("Formula: \"A!\", Sets: {:?} => Result (length={}): {:?}", sets3, result3.len(), result3);
+    
+    // 他の例も追加可能
+    println!("--- End of eval_set tests ---");
 }
