@@ -112,6 +112,4 @@ mod tests {
 //     let result3 = eval_set("A!", sets3.clone());
 //     println!("Formula: \"A!\", Sets: {:?} => Result (length={}): {:?}", sets3, result3.len(), result3);
     
-//     // 他の例も追加可能
-//     println!("--- End of eval_set tests ---");
 // }
