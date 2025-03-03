@@ -1,7 +1,3 @@
-// pub fn eval_formula(formula: &str) -> bool {
-//     eval_formula_with_stack(formula)
-// }
-
 pub fn eval_formula(formula: &str) -> bool {
     let mut stack = Vec::new();
     
