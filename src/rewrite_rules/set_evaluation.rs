@@ -1,40 +1,43 @@
-// 例: src/instructions/set_evaluation.rs などに配置
 
-/// RPN 形式のブール式と、各変数に対応する集合のリストから、
-/// 式を評価して結果の集合を返す関数。
-/// グローバルな集合は 0..=100 として補集合を求める。
 pub fn eval_set(formula: &str, sets: Vec<Vec<i32>>) -> Vec<i32> {
+    // 全体集合を、渡されたすべての集合の和集合として求める
+    let mut universe = Vec::new();
+    for s in &sets {
+        universe.extend(s.iter());
+    }
+    universe.sort();
+    universe.dedup();
+
     let mut stack = Vec::new();
-    // 式中に現れる変数（A～Z）を順に取得（ただし、ここでは直接変数の文字を利用）
-    let _variables: Vec<char> = formula.chars().filter(|&c| c.is_alphabetic()).collect();
     
     for ch in formula.chars() {
         match ch {
             'A'..='Z' => {
-                // 'A' に対応する集合は sets[0]、'B' は sets[1] など
                 let idx = (ch as usize) - ('A' as usize);
-                stack.push(sets[idx].clone());
+                if idx < sets.len() {
+                    stack.push(sets[idx].clone());
+                } else {
+                    stack.push(vec![]);
+                }
             }
             '!' => {
                 let set = stack.pop().unwrap();
-                // グローバルな集合 [0,100] から set に含まれない要素を集める
-                let complement: Vec<i32> = (0..=100).filter(|x| !set.contains(x)).collect();
+                let complement: Vec<i32> = universe.iter()
+                    .filter(|x| !set.contains(x))
+                    .cloned()
+                    .collect();
                 stack.push(complement);
             }
             '&' => {
                 let b = stack.pop().unwrap();
                 let a = stack.pop().unwrap();
-                // a ∩ b
                 let intersection: Vec<i32> = a.into_iter().filter(|x| b.contains(x)).collect();
                 stack.push(intersection);
             }
             '|' => {
                 let b = stack.pop().unwrap();
                 let a = stack.pop().unwrap();
-                // a ∪ b
-                // 重複があっても順序は問わないので、そのまま連結
                 let mut union: Vec<i32> = a.into_iter().chain(b.into_iter()).collect();
-                // 重複削除のためソートして dedup する
                 union.sort();
                 union.dedup();
                 stack.push(union);
@@ -46,11 +49,10 @@ pub fn eval_set(formula: &str, sets: Vec<Vec<i32>>) -> Vec<i32> {
     stack.pop().unwrap()
 }
 
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // 補助関数：Vec<i32> をソートしたコピーを返す
     fn sorted(mut v: Vec<i32>) -> Vec<i32> {
         v.sort();
         v
