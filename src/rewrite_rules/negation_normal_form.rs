@@ -50,7 +50,6 @@ fn parse_rpn(formula: &str) -> Option<Expr> {
     }
 }
 
-/// 含意、同値を展開する
 fn eliminate_implications(expr: Expr) -> Expr {
     match expr {
         Expr::Imp(a, b) => {
@@ -125,7 +124,7 @@ fn to_rpn(expr: &Expr) -> String {
     }
 }
 
-/// 指定された RPN 式を否定正規形 (NNF) に変換し、RPN 表記で返す。
+/// RPN 式をNNFに変換し、RPN 表記で返す。
 pub fn negation_normal_form(formula: &str) -> String {
     if let Some(parsed) = parse_rpn(formula) {
         let no_imp = eliminate_implications(parsed);
@@ -136,7 +135,6 @@ pub fn negation_normal_form(formula: &str) -> String {
     }
 }
 
-// Cargo テスト用
 #[cfg(test)]
 mod tests {
     use super::*;
