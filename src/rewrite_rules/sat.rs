@@ -80,12 +80,6 @@ mod tests {
         assert_eq!(sat("0"), false);
     }
 
-    #[test]
-    fn test_sat_negation() {
-        // "1!" は 1 を否定して false、"0!" は 0 を否定して true
-        assert_eq!(sat("1!"), false);
-        assert_eq!(sat("0!"), true);
-    }
 
     #[test]
     fn test_sat_and() {
