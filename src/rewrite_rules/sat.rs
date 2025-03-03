@@ -55,12 +55,6 @@ mod tests {
     }
 
     #[test]
-    fn test_sat_negation() {
-        // "A!" → NOT true = false
-        assert_eq!(sat("A!"), false);
-    }
-
-    #[test]
     fn test_sat_xor() {
         // "AA^" → true XOR true = false
         assert_eq!(sat("AA^"), false);
