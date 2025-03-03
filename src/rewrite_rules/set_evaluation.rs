@@ -11,7 +11,6 @@ pub fn eval_set(formula: &str, sets: Vec<Vec<i32>>) -> Vec<i32> {
     for ch in formula.chars() {
         match ch {
             'A'..='Z' => {
-                // 'A' は sets[0], 'B' は sets[1] など
                 let idx = (ch as usize) - ('A' as usize);
                 if idx < sets.len() {
                     stack.push(sets[idx].clone());
@@ -79,8 +78,7 @@ mod tests {
 
     #[test]
     fn test_eval_set_complement() {
-        // 単一の集合の場合、全体集合はその集合そのものになるので、
-        // "A!" は [0,1,2] の補集合 relative to [0,1,2] → [] となる
+        // "A!" は [0,1,2] の補集合  [0,1,2] → [] となる
         let sets = vec![vec![0, 1, 2]];
         let result = eval_set("A!", sets);
         assert_eq!(sorted(result), sorted(vec![]));

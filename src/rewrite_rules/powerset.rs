@@ -1,8 +1,5 @@
-// src/instructions/set_functions.rs などに配置するか、
-// 適切なファイルに powerset 関数を定義してください。
-
 pub fn powerset(set: Vec<i32>) -> Vec<Vec<i32>> {
-    let mut result = vec![vec![]]; // 空集合を最初に追加
+    let mut result = vec![vec![]];
     
     for num in set {
         let mut new_subsets = Vec::new();
@@ -41,7 +38,6 @@ mod tests {
     fn test_powerset_two_elements() {
         let input = vec![1, 2];
         let output = powerset(input);
-        // 順序は以下の通り: [], [1], [2], [1, 2]
         let expected = vec![vec![], vec![1], vec![2], vec![1, 2]];
         assert_eq!(output, expected);
     }
@@ -50,7 +46,6 @@ mod tests {
     fn test_powerset_three_elements() {
         let input = vec![1, 2, 3];
         let output = powerset(input);
-        // 順序は: [], [1], [2], [1, 2], [3], [1, 3], [2, 3], [1, 2, 3]
         let expected = vec![
             vec![],
             vec![1],

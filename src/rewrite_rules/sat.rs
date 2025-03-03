@@ -105,7 +105,7 @@ mod tests {
 
     #[test]
     fn test_sat_complex_expression() {
-        // 例: "101|&" → まず 0 OR 1 → true, その後 1 AND true → true
+        // 例: "101|&" → 0 OR 1 → true, その後 1 AND true → true
         assert_eq!(sat("101|&"), true);
     }
 }

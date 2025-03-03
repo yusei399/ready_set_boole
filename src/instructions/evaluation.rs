@@ -129,7 +129,6 @@ mod tests {
     #[test]
     fn test_complex_expression() {
         // 複合的な式：例として "1011||=" のテスト
-        // この式は、逆ポーランド記法で表現されると
         // 1 0 1 1 || = → (1 ∨ 0) = (1 ∨ 1) → (true) = (true) → true
         assert_eq!(eval_formula("1011||="), true);
     }
