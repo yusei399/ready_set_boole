@@ -9,7 +9,6 @@ pub fn eval_formula(formula: &str) -> bool {
                 if let Some(operand) = stack.pop() {
                     stack.push(!operand);
                 } else {
-                    // オペランドが不足している場合は false を返す
                     return false;
                 }
             }
@@ -35,7 +34,6 @@ pub fn eval_formula(formula: &str) -> bool {
                 }
                 let operand2 = stack.pop().unwrap();
                 let operand1 = stack.pop().unwrap();
-                // 含意: A > B を ¬A ∨ B として評価
                 stack.push(!operand1 || operand2);
             }
             '=' => {
@@ -55,14 +53,10 @@ pub fn eval_formula(formula: &str) -> bool {
                 stack.push(operand1 != operand2);
             }
             _ => {
-                // 無効なトークンが現れた場合も false を返す
                 return false;
             }
         }
     }
-    
-    // 最終的にスタックに1つの要素しか残っていなければ、その値を返す
-    // そうでなければ不正な式とみなして false を返す
     if stack.len() == 1 {
         stack.pop().unwrap()
     } else {
