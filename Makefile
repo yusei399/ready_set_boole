@@ -1,6 +1,3 @@
-# Makefile for ready_set_boole
-
-# デフォルトターゲットを build に設定
 .DEFAULT_GOAL := build
 
 CARGO ?= cargo
