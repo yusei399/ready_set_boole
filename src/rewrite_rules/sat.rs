@@ -1,5 +1,3 @@
-// sat.rs
-
 pub fn sat(formula: &str) -> bool {
     let mut stack = Vec::new();
     
@@ -7,6 +5,7 @@ pub fn sat(formula: &str) -> bool {
         match ch {
             '0' => stack.push(false),
             '1' => stack.push(true),
+            'A'..='Z' => stack.push(true),
             '!' => {
                 let val = stack.pop().expect("Not enough operands for '!'");
                 stack.push(!val);
@@ -21,6 +20,11 @@ pub fn sat(formula: &str) -> bool {
                 let a = stack.pop().expect("Not enough operands for '|'");
                 stack.push(a || b);
             }
+            '^' => {
+                let b = stack.pop().expect("Not enough operands for '^'");
+                let a = stack.pop().expect("Not enough operands for '^'");
+                stack.push(a != b);
+            }
             _ => (),
         }
     }
@@ -28,10 +32,48 @@ pub fn sat(formula: &str) -> bool {
     stack.pop().expect("Formula is invalid")
 }
 
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    #[test]
+    fn test_sat_literals() {
+        // 単一リテラル
+        assert_eq!(sat("1"), true);
+        assert_eq!(sat("0"), false);
+    }
+
+    #[test]
+    fn test_sat_variables() {
+        // 変数は常に true とみなす
+        assert_eq!(sat("A"), true);
+        // A OR B → true OR true = true
+        assert_eq!(sat("AB|"), true);
+        // A AND B → true AND true = true
+        assert_eq!(sat("AB&"), true);
+    }
+
+    #[test]
+    fn test_sat_negation() {
+        // "A!" → NOT true = false
+        assert_eq!(sat("A!"), false);
+    }
+
+    #[test]
+    fn test_sat_xor() {
+        // "AA^" → true XOR true = false
+        assert_eq!(sat("AA^"), false);
+        // "AB^" → true XOR true = false (変数は常に true)
+        assert_eq!(sat("AB^"), false);
+    }
+
+    #[test]
+    fn test_sat_complex() {
+        // "AA!&" → push A (true), push A (true), then '!' makes true→false,
+        // そして AND: true AND false = false
+        assert_eq!(sat("AA!&"), false);
+    }
     #[test]
     fn test_sat_literal_true() {
         // 単一のリテラル "1" は true を返す
