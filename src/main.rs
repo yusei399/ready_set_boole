@@ -38,6 +38,9 @@ fn main() {
     println!("{}", gray_code(3));
     println!("{}", gray_code(4));
     println!("{}", gray_code(5));
+    println!("{}", gray_code(6));
+    println!("{}", gray_code(7));
+    println!("{}", gray_code(8));
 
     println!("Evaluation");
     println!("Test literal values:");
@@ -60,6 +63,7 @@ fn main() {
     println!("eval_formula(\"01|\") = {} (expected: true)", eval_formula("01|"));
     println!("eval_formula(\"00|\") = {} (expected: false)", eval_formula("00|"));
     println!("eval_formula(\"11|\") = {} (expected: true)", eval_formula("11|"));
+    println!("eval_formula(\"11|\") = {} (expected: true)", eval_formula("10|"));
 
     // xor
     println!("Test XOR:");
@@ -112,6 +116,16 @@ fn main() {
         let nnf = negation_normal_form(input);
         println!("Input: {:<8} -> NNF: {:<12} (expected: {})", input, nnf, expected);
     }
+    println!("{}", negation_normal_form("AB&!"));
+    // A!B!|
+    println!("{}", negation_normal_form("AB|!"));
+    // A!B!&
+    println!("{}", negation_normal_form("AB>"));
+    // A!B|
+    println!("{}", negation_normal_form("AB="));
+    // AB&A!B!&|
+    println!("{}", negation_normal_form("AB|C&!"));
+    // A!B!&C!|
 
         println!("--- Conjunctive Normal Form Conversion ---");
         let formulas = [
@@ -127,12 +141,33 @@ fn main() {
             let cnf = conjunctive_normal_form(input);
             println!("Input: {:<10} -> CNF: {:<12} (expected: {})", input, cnf, expected);
         }
+        println!("{}", conjunctive_normal_form("AB&!"));
+        // A!B!|
+        println!("{}", conjunctive_normal_form("AB|!"));
+        // A!B!&
+        println!("{}", conjunctive_normal_form("AB|C&"));
+        // AB|C&
+        println!("{}", conjunctive_normal_form("AB|C|D|"));
+        // ABCD|||
+        println!("{}", conjunctive_normal_form("AB&C&D&"));
+        // ABCD&&&
+        println!("{}", conjunctive_normal_form("AB&!C!|"));
+        // A!B!C!||
+        println!("{}", conjunctive_normal_form("AB|!C!&"));
+        // A!B!C!&&
 
     println!("--- SAT Tests from main ---");
     println!("sat(\"1\") = {} (expected: true)", sat("1"));
     println!("sat(\"0\") = {} (expected: false)", sat("0"));
     println!("sat(\"1!\") = {} (expected: false)", sat("1!"));
     println!("sat(\"0!\") = {} (expected: true)", sat("0!"));
+    println!("{}", sat("AB|"));
+    // true
+    println!("{}", sat("AB&"));
+    // true
+    println!("{}", sat("AA!&"));
+    // false
+    println!("{}", sat("AA^"));
 
     println!("--- Powerset Tests in main() ---");
 
@@ -167,6 +202,4 @@ fn main() {
     let result3 = eval_set("A!", sets3.clone());
     println!("Formula: \"A!\", Sets: {:?} => Result (length={}): {:?}", sets3, result3.len(), result3);
     
-    // 他の例も追加可能
-    println!("--- End of eval_set tests ---");
 }
