@@ -1,4 +1,3 @@
-// src/instructions/conjunctive_normal_form.rs
 
 #[derive(Debug, Clone)]
 enum Expr {
@@ -9,7 +8,7 @@ enum Expr {
     Or(Box<Expr>, Box<Expr>),
 }
 
-/// RPN 文字列を AST にパースする（対応する記号: '0','1','A'..='Z','!','&','|'）
+/// RPN 文字列を AST にパース
 fn parse_rpn(formula: &str) -> Option<Expr> {
     let mut stack = Vec::new();
     for ch in formula.chars() {
@@ -41,7 +40,7 @@ fn parse_rpn(formula: &str) -> Option<Expr> {
     }
 }
 
-/// NNF 変換：否定をリテラルの直前まで下ろす
+/// NNF 変換
 fn to_nnf(expr: Expr) -> Expr {
     match expr {
         Expr::Not(inner) => match *inner {
@@ -112,7 +111,8 @@ fn flatten_or(expr: &Expr) -> Vec<Expr> {
     }
 }
 
-/// AST を RPN 表記の文字列に変換する。なお、AND と OR はフラット化して出力する。
+/// AST を RPN 表記の文字列に変換,
+// AND と OR はフラット化して出力する。
 fn to_rpn(expr: &Expr) -> String {
     match expr {
         Expr::Var(s) => s.clone(),
@@ -144,7 +144,7 @@ fn to_rpn(expr: &Expr) -> String {
     }
 }
 
-/// 入力の RPN 式（入力は NNF 状態であることを前提）を CNF に変換し、RPN 表記の文字列として返す。
+/// 入力の RPN 式（入力は NNF 状態である）を CNF に変換し、RPN 表記の文字列として返す。
 pub fn conjunctive_normal_form(formula: &str) -> String {
     if let Some(ast) = parse_rpn(formula) {
         let nnf_ast = to_nnf(ast);
