@@ -1,158 +1,87 @@
+use std::collections::{HashSet, VecDeque};
 
-#[derive(Debug, Clone)]
-enum Expr {
-    Var(String),
-    Const(bool),
-    Not(Box<Expr>),
-    And(Box<Expr>, Box<Expr>),
-    Or(Box<Expr>, Box<Expr>),
-}
+use super::negation_normal_form::{push_literal, NormalForm, Token};
 
-/// RPN 文字列を AST にパース
-fn parse_rpn(formula: &str) -> Option<Expr> {
-    let mut stack = Vec::new();
-    for ch in formula.chars() {
-        match ch {
-            '0' => stack.push(Expr::Const(false)),
-            '1' => stack.push(Expr::Const(true)),
-            'A'..='Z' => stack.push(Expr::Var(ch.to_string())),
-            '!' => {
-                let expr = stack.pop()?;
-                stack.push(Expr::Not(Box::new(expr)));
+type Clause = Vec<(char, bool)>;
+type Clauses = VecDeque<Clause>;
+
+fn disjoin(left: Clauses, right: Clauses) -> Clauses {
+    let mut result = VecDeque::new();
+    let mut seen = HashSet::new();
+    for a in &left {
+        for b in &right {
+            let mut merged = a.clone();
+            for &(symbol, negated) in b {
+                if !merged.contains(&(symbol, negated)) {
+                    merged.push((symbol, negated));
+                }
             }
-            '&' => {
-                let right = stack.pop()?;
-                let left = stack.pop()?;
-                stack.push(Expr::And(Box::new(left), Box::new(right)));
+
+            // A clause containing both polarities is always true and can be dropped.
+            let mut key = merged.clone();
+            key.sort_unstable();
+            let tautology = key.windows(2).any(|pair| pair[0].0 == pair[1].0);
+            if !tautology && seen.insert(key) {
+                result.push_back(merged);
             }
-            '|' => {
-                let right = stack.pop()?;
-                let left = stack.pop()?;
-                stack.push(Expr::Or(Box::new(left), Box::new(right)));
-            }
-            _ => return None,
         }
     }
-    if stack.len() == 1 {
-        Some(stack.pop()?)
-    } else {
-        None
-    }
+    result
 }
 
-/// NNF 変換
-fn to_nnf(expr: Expr) -> Expr {
-    match expr {
-        Expr::Not(inner) => match *inner {
-            Expr::Not(e) => to_nnf(*e), // 二重否定
-            Expr::And(a, b) => {
-                // ¬(A ∧ B) → ¬A ∨ ¬B
-                Expr::Or(Box::new(to_nnf(Expr::Not(a))), Box::new(to_nnf(Expr::Not(b))))
-            }
-            Expr::Or(a, b) => {
-                // ¬(A ∨ B) → ¬A ∧ ¬B
-                Expr::And(Box::new(to_nnf(Expr::Not(a))), Box::new(to_nnf(Expr::Not(b))))
-            }
-            other => Expr::Not(Box::new(to_nnf(other))),
-        },
-        Expr::And(a, b) => Expr::And(Box::new(to_nnf(*a)), Box::new(to_nnf(*b))),
-        Expr::Or(a, b) => Expr::Or(Box::new(to_nnf(*a)), Box::new(to_nnf(*b))),
-        other => other,
-    }
-}
-
-/// OR 分配則を適用して CNF にする
-fn distribute_or(expr: Expr) -> Expr {
-    match expr {
-        Expr::Or(a, b) => {
-            let a = distribute_or(*a);
-            let b = distribute_or(*b);
-            match (a, b) {
-                (Expr::And(a1, a2), b) => Expr::And(
-                    Box::new(distribute_or(Expr::Or(a1, Box::new(b.clone())))),
-                    Box::new(distribute_or(Expr::Or(a2, Box::new(b)))),
-                ),
-                (a, Expr::And(b1, b2)) => Expr::And(
-                    Box::new(distribute_or(Expr::Or(Box::new(a.clone()), b1))),
-                    Box::new(distribute_or(Expr::Or(Box::new(a), b2))),
-                ),
-                (a, b) => Expr::Or(Box::new(a), Box::new(b)),
-            }
-        }
-        Expr::And(a, b) => Expr::And(Box::new(distribute_or(*a)), Box::new(distribute_or(*b))),
-        Expr::Not(e) => Expr::Not(Box::new(distribute_or(*e))),
-        other => other,
-    }
-}
-
-/// AND チェーンをフラット化する
-fn flatten_and(expr: &Expr) -> Vec<Expr> {
-    match expr {
-        Expr::And(a, b) => {
-            let mut left = flatten_and(a);
-            let mut right = flatten_and(b);
-            left.append(&mut right);
-            left
-        }
-        _ => vec![expr.clone()],
-    }
-}
-
-/// OR チェーンをフラット化する
-fn flatten_or(expr: &Expr) -> Vec<Expr> {
-    match expr {
-        Expr::Or(a, b) => {
-            let mut left = flatten_or(a);
-            let mut right = flatten_or(b);
-            left.append(&mut right);
-            left
-        }
-        _ => vec![expr.clone()],
-    }
-}
-
-/// AST を RPN 表記の文字列に変換,
-// AND と OR はフラット化して出力する。
-fn to_rpn(expr: &Expr) -> String {
-    match expr {
-        Expr::Var(s) => s.clone(),
-        Expr::Const(true) => "1".to_string(),
-        Expr::Const(false) => "0".to_string(),
-        Expr::Not(e) => format!("{}!", to_rpn(e)),
-        Expr::And(_, _) => {
-            let operands = flatten_and(expr);
-            let mut rpn = String::new();
-            for op in &operands {
-                rpn.push_str(&to_rpn(op));
-            }
-            for _ in 0..(operands.len() - 1) {
-                rpn.push('&');
-            }
-            rpn
-        }
-        Expr::Or(_, _) => {
-            let operands = flatten_or(expr);
-            let mut rpn = String::new();
-            for op in &operands {
-                rpn.push_str(&to_rpn(op));
-            }
-            for _ in 0..(operands.len() - 1) {
-                rpn.push('|');
-            }
-            rpn
-        }
-    }
-}
-
-/// 入力の RPN 式（入力は NNF 状態である）を CNF に変換し、RPN 表記の文字列として返す。
 pub fn conjunctive_normal_form(formula: &str) -> String {
-    if let Some(ast) = parse_rpn(formula) {
-        let nnf_ast = to_nnf(ast);
-        let cnf_ast = distribute_or(nnf_ast);
-        to_rpn(&cnf_ast)
-    } else {
-        "Error: invalid formula".to_string()
+    let Some(form) = NormalForm::parse(formula) else {
+        return "Error: invalid formula".to_string();
+    };
+    let mut operands = Vec::<Clauses>::new();
+    for token in form.tokens() {
+        let clauses = match token {
+            Token::Literal(symbol, negated) => Clauses::from([vec![(symbol, negated)]]),
+            Token::And => {
+                let mut right = operands.pop().unwrap();
+                let mut left = operands.pop().unwrap();
+                // Move the smaller side and keep the original clause order.
+                if left.len() >= right.len() {
+                    left.append(&mut right);
+                    left
+                } else {
+                    for clause in left.into_iter().rev() {
+                        right.push_front(clause);
+                    }
+                    right
+                }
+            }
+            Token::Or => {
+                let right = operands.pop().unwrap();
+                let left = operands.pop().unwrap();
+                disjoin(left, right)
+            }
+        };
+        operands.push(clauses);
     }
+
+    let clauses = operands.pop().unwrap();
+    if clauses.is_empty() {
+        let symbol = formula
+            .chars()
+            .find(char::is_ascii_uppercase)
+            .unwrap_or('A');
+        return format!("{symbol}{symbol}!|");
+    }
+
+    let mut output = String::new();
+    for clause in &clauses {
+        for &(symbol, negated) in clause {
+            push_literal(&mut output, symbol, negated);
+        }
+        for _ in 1..clause.len() {
+            output.push('|');
+        }
+    }
+    for _ in 1..clauses.len() {
+        output.push('&');
+    }
+    output
 }
 
 #[cfg(test)]
@@ -214,22 +143,41 @@ mod tests {
         let expected = "A!B!C!&&";
         assert_eq!(conjunctive_normal_form(input), expected);
     }
-}
 
-// main 関数での手動テスト用出力例
-// fn main() {
-//     println!("--- Conjunctive Normal Form Conversion ---");
-//     let formulas = [
-//         ("AB&!", "A!B!|"),
-//         ("AB|!", "A!B!&"),
-//         ("AB|C&", "AB|C&"),
-//         ("AB|C|D|", "ABCD|||"),
-//         ("AB&C&D&", "ABCD&&&"),
-//         ("AB&!C!|", "A!B!C!||"),
-//         ("AB|!C!&", "A!B!C!&&"),
-//     ];
-//     for (input, expected) in formulas.iter() {
-//         let cnf = conjunctive_normal_form(input);
-//         println!("Input: {:<10} -> CNF: {:<12} (expected: {})", input, cnf, expected);
-//     }
-// }
+    #[test]
+    fn test_conjunctive_normal_form_distributes_disjunction() {
+        assert_eq!(conjunctive_normal_form("ABCD&|&"), "ABC|BD|&&");
+    }
+
+    #[test]
+    fn test_conjunctive_normal_form_handles_all_operators() {
+        assert_eq!(conjunctive_normal_form("AB>"), "A!B|");
+        assert_eq!(conjunctive_normal_form("AB^!"), "A!B|AB!|&");
+        assert_eq!(conjunctive_normal_form("AB=!"), "A!B!|AB|&");
+    }
+
+    #[test]
+    fn handles_deep_valid_formulas() {
+        assert_eq!(
+            conjunctive_normal_form(&format!("A{}", "!".repeat(200_000))),
+            "A"
+        );
+        let nested = format!("{}C{}", "AB".repeat(20_000), "&".repeat(40_000));
+        assert_eq!(conjunctive_normal_form(&nested), nested);
+    }
+
+    #[test]
+    fn simplifies_repeated_xor_before_distribution() {
+        assert_eq!(conjunctive_normal_form("AA^A^A^A^"), "A");
+        assert_eq!(
+            conjunctive_normal_form(&format!("A{}", "A^".repeat(200))),
+            "A"
+        );
+    }
+
+    #[test]
+    fn drops_tautological_and_duplicate_clauses() {
+        assert_eq!(conjunctive_normal_form("AB&A!|"), "BA!|");
+        assert_eq!(conjunctive_normal_form("AB&BA&|"), "AB|AB&&");
+    }
+}
