@@ -62,7 +62,7 @@ fn main() {
     println!("eval_formula(\"01|\") = {} (expected: true)", eval_formula("01|"));
     println!("eval_formula(\"00|\") = {} (expected: false)", eval_formula("00|"));
     println!("eval_formula(\"11|\") = {} (expected: true)", eval_formula("11|"));
-    println!("eval_formula(\"11|\") = {} (expected: true)", eval_formula("10|"));
+    println!("eval_formula(\"10|\") = {} (expected: true)", eval_formula("10|"));
 
     // xor
     println!("Test XOR:");
@@ -83,7 +83,7 @@ fn main() {
     println!("eval_formula(\"10=\") = {} (expected: false)", eval_formula("10="));
     println!("eval_formula(\"00=\") = {} (expected: true)", eval_formula("00="));
 
-    // complex expression -- RPN では "1011||=" となる
+    // 1 = (0 | (1 | 1)) in RPN
     println!("Test complex expression:");
     println!("eval_formula(\"1011||=\") = {} (expected: true)", eval_formula("1011||="));
 
