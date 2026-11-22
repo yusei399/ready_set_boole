@@ -1,51 +1,23 @@
+use std::collections::BTreeMap;
+
+use crate::instructions::evaluation::{evaluate, variable_index};
+
 pub fn eval_set(formula: &str, sets: Vec<Vec<i32>>) -> Vec<i32> {
-    let mut universe = Vec::new();
-    for s in &sets {
-        universe.extend(s.iter());
-    }
-    universe.sort();
-    universe.dedup();
-    
-    let mut stack = Vec::new();
-    
-    for ch in formula.chars() {
-        match ch {
-            'A'..='Z' => {
-                let idx = (ch as usize) - ('A' as usize);
-                if idx < sets.len() {
-                    stack.push(sets[idx].clone());
-                } else {
-                    stack.push(vec![]);
-                }
-            }
-            '!' => {
-                let set = stack.pop().unwrap();
-                let complement: Vec<i32> = universe
-                    .iter()
-                    .filter(|x| !set.contains(x))
-                    .cloned()
-                    .collect();
-                stack.push(complement);
-            }
-            '&' => {
-                let b = stack.pop().unwrap();
-                let a = stack.pop().unwrap();
-                let intersection: Vec<i32> = a.into_iter().filter(|x| b.contains(x)).collect();
-                stack.push(intersection);
-            }
-            '|' => {
-                let b = stack.pop().unwrap();
-                let a = stack.pop().unwrap();
-                let mut union: Vec<i32> = a.into_iter().chain(b.into_iter()).collect();
-                union.sort();
-                union.dedup();
-                stack.push(union);
-            }
-            _ => (),
+    // An element is in the universe if it belongs to at least one input set.
+    let mut universe = BTreeMap::<i32, u32>::new();
+    for (index, set) in sets.into_iter().enumerate() {
+        for element in set {
+            *universe.entry(element).or_default() |= 1 << index;
         }
     }
-    
-    stack.pop().unwrap()
+
+    universe
+        .into_iter()
+        .filter_map(|(element, membership)| {
+            let value = |variable| Some(membership & (1 << variable_index(variable)) != 0);
+            (evaluate(formula, value) == Some(true)).then_some(element)
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -83,23 +55,21 @@ mod tests {
         let result = eval_set("A!", sets);
         assert_eq!(sorted(result), sorted(vec![]));
     }
+
+    #[test]
+    fn test_eval_set_xor_implication_and_equivalence() {
+        let sets = vec![vec![1, 2], vec![2, 3]];
+        assert_eq!(eval_set("AB^", sets.clone()), vec![1, 3]);
+        assert_eq!(eval_set("AB>", sets.clone()), vec![2, 3]);
+        assert_eq!(eval_set("BA>", sets.clone()), vec![1, 2]);
+        assert_eq!(eval_set("AB=", sets), vec![2]);
+    }
+
+    #[test]
+    fn test_eval_set_nested_operations_use_the_whole_universe() {
+        let sets = vec![vec![1, 2], vec![2, 3], vec![-1, 3]];
+        // -1 belongs to neither A nor B, so A = B holds there.
+        assert_eq!(eval_set("AB=C&", sets.clone()), vec![-1]);
+        assert_eq!(eval_set("AB|!C&", sets), vec![-1]);
+    }
 }
-
-// fn main() {
-//     println!("--- eval_set Tests in main() ---");
-
-//     // Test 1: Intersection
-//     let sets1 = vec![vec![0, 1, 2], vec![0, 3, 4]];
-//     let result1 = eval_set("AB&", sets1.clone());
-//     println!("Formula: \"AB&\", Sets: {:?} => Result: {:?}", sets1, result1);
-
-//     // Test 2: Union
-//     let sets2 = vec![vec![0, 1, 2], vec![3, 4, 5]];
-//     let result2 = eval_set("AB|", sets2.clone());
-//     println!("Formula: \"AB|\", Sets: {:?} => Result: {:?}", sets2, result2);
-
-//     // Test 3: Complement
-//     let sets3 = vec![vec![0, 1, 2]];
-//     let result3 = eval_set("A!", sets3.clone());
-//     println!("Formula: \"A!\", Sets: {:?} => Result (length={}): {:?}", sets3, result3.len(), result3);
-// }
