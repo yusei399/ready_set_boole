@@ -1,37 +1,10 @@
-pub fn sat(formula: &str) -> bool {
-    let mut stack = Vec::new();
-    
-    for ch in formula.chars() {
-        match ch {
-            '0' => stack.push(false),
-            '1' => stack.push(true),
-            'A'..='Z' => stack.push(true),
-            '!' => {
-                let val = stack.pop().expect("Not enough operands for '!'");
-                stack.push(!val);
-            }
-            '&' => {
-                let b = stack.pop().expect("Not enough operands for '&'");
-                let a = stack.pop().expect("Not enough operands for '&'");
-                stack.push(a && b);
-            }
-            '|' => {
-                let b = stack.pop().expect("Not enough operands for '|'");
-                let a = stack.pop().expect("Not enough operands for '|'");
-                stack.push(a || b);
-            }
-            '^' => {
-                let b = stack.pop().expect("Not enough operands for '^'");
-                let a = stack.pop().expect("Not enough operands for '^'");
-                stack.push(a != b);
-            }
-            _ => (),
-        }
-    }
-    
-    stack.pop().expect("Formula is invalid")
-}
+use crate::instructions::evaluation::{assignments, evaluate, variable_index, variables};
 
+pub fn sat(formula: &str) -> bool {
+    assignments(&variables(formula)).any(|values| {
+        evaluate(formula, |variable| Some(values[variable_index(variable)])) == Some(true)
+    })
+}
 
 #[cfg(test)]
 mod tests {
@@ -46,7 +19,6 @@ mod tests {
 
     #[test]
     fn test_sat_variables() {
-        // 変数は常に true とみなす
         assert_eq!(sat("A"), true);
         // A OR B → true OR true = true
         assert_eq!(sat("AB|"), true);
@@ -58,14 +30,11 @@ mod tests {
     fn test_sat_xor() {
         // "AA^" → true XOR true = false
         assert_eq!(sat("AA^"), false);
-        // "AB^" → true XOR true = false (変数は常に true)
-        assert_eq!(sat("AB^"), false);
+        assert!(sat("AB^"));
     }
 
     #[test]
     fn test_sat_complex() {
-        // "AA!&" → push A (true), push A (true), then '!' makes true→false,
-        // そして AND: true AND false = false
         assert_eq!(sat("AA!&"), false);
     }
     #[test]
@@ -80,6 +49,14 @@ mod tests {
         assert_eq!(sat("0"), false);
     }
 
+    #[test]
+    fn test_sat_searches_assignments_with_false_values() {
+        assert!(sat("Z!"));
+        assert!(sat("AB>!"));
+        assert!(sat("AB=!"));
+        assert!(!sat("AA>!"));
+        assert!(!sat("ZZ=!"));
+    }
 
     #[test]
     fn test_sat_and() {
@@ -103,16 +80,3 @@ mod tests {
         assert_eq!(sat("101|&"), true);
     }
 }
-
-// fn main() {
-//     println!("SAT Evaluation Tests (manual):");
-//     println!("sat(\"1\") = {}", sat("1"));         // true
-//     println!("sat(\"0\") = {}", sat("0"));         // false
-//     println!("sat(\"1!\") = {}", sat("1!"));       // false
-//     println!("sat(\"0!\") = {}", sat("0!"));       // true
-//     println!("sat(\"11&\") = {}", sat("11&"));     // true
-//     println!("sat(\"10&\") = {}", sat("10&"));     // false
-//     println!("sat(\"10|\") = {}", sat("10|"));     // true
-//     println!("sat(\"00|\") = {}", sat("00|"));     // false
-//     println!("sat(\"101|&\") = {}", sat("101|&")); // true
-// }
