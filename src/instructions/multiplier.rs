@@ -5,6 +5,7 @@ pub fn multiplier(a: u32, b: u32) -> u32 {
     let mut multiplier = b;
     let mut result = 0;
 
+    // At most 32 iterations for a u32 multiplier.
     while multiplier != 0 {
         if multiplier & 1 != 0 {
             result = adder(result, factor);
@@ -37,12 +38,12 @@ mod tests {
     }
 
     #[test]
-    fn multiplier_with_1k() {
-        assert_eq!(adder(4_000, 2_000), 6_000);
+    fn multiplier_with_thousands() {
+        assert_eq!(multiplier(4_000, 2_000), 8_000_000);
     }
 
     #[test]
-    fn multiplier_with_1k_and_1k() {
-        assert_eq!(adder(4_000, 2_000), 6_000);
+    fn multiplier_uses_the_highest_bit() {
+        assert_eq!(multiplier(1, 0x8000_0000), 0x8000_0000);
     }
 }
