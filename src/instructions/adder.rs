@@ -1,11 +1,10 @@
-pub fn adder(a: u32, b: u32) -> u32{
-    if a == 0 {
-        return b;
+pub fn adder(mut a: u32, mut b: u32) -> u32 {
+    while b != 0 {
+        let carry = (a & b) << 1;
+        a ^= b;
+        b = carry;
     }
-    if b == 0 {
-        return a;
-    }
-    adder(a ^ b, (a & b) << 1)
+    a
 }
 
 #[cfg(test)]
@@ -26,6 +25,11 @@ mod tests {
     fn adder_with_one_zero() {
         assert_eq!(adder(4, 0), 4);
         assert_eq!(adder(0, 2), 2);
+    }
+
+    #[test]
+    fn adder_propagates_carry_to_the_highest_bit() {
+        assert_eq!(adder(0x7fff_ffff, 1), 0x8000_0000);
     }
 
     #[test]
