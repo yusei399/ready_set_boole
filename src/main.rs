@@ -2,7 +2,7 @@ mod curve;
 mod instructions;
 mod rewrite_rules;
 
-use crate::curve::map;
+use crate::curve::{map, reverse_map};
 use crate::instructions::adder::adder;
 use crate::instructions::multiplier::multiplier;
 use crate::instructions::gray_code::gray_code;
@@ -205,8 +205,10 @@ fn main() {
     let result3 = eval_set("A!", sets3.clone());
     println!("Formula: \"A!\", Sets: {:?} => Result (length={}): {:?}", sets3, result3.len(), result3);
 
-    println!("--- Curve ---");
+    println!("--- Curve and inverse function ---");
     for (x, y) in [(0, 0), (1, 2), (u16::MAX, u16::MAX)] {
-        println!("map({x}, {y}) = {}", map(x, y));
+        let n = map(x, y);
+        println!("map({x}, {y}) = {n}");
+        println!("reverse_map({n}) = {:?}", reverse_map(n));
     }
 }
