@@ -28,7 +28,6 @@ fn main() {
     println!("{}", multiplier(3, 1));
     println!("{}", multiplier(4_000, 2_000));
     println!("{}", multiplier(4_0000, 2_0000));
-    println!("{}", multiplier(4_00000, 2_00000));
     println!("----------------------------------");
 
     println!("Gray Code");
