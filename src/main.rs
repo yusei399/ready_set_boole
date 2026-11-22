@@ -166,7 +166,9 @@ fn main() {
     // true
     println!("{}", sat("AA!&"));
     // false
-    println!("{}", sat("AA^"));
+    println!("sat(\"AA^\") = {} (expected: false)", sat("AA^"));
+    println!("sat(\"AB^\") = {} (expected: true)", sat("AB^"));
+    println!("sat(\"A!\") = {} (expected: true)", sat("A!"));
 
     println!("--- Powerset Tests in main() ---");
 
