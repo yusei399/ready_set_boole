@@ -1,16 +1,15 @@
 pub fn powerset(set: Vec<i32>) -> Vec<Vec<i32>> {
     let mut result = vec![vec![]];
-    
+
     for num in set {
-        let mut new_subsets = Vec::new();
-        for subset in result.iter() {
-            let mut new_subset = subset.clone();
+        let previous_count = result.len();
+        for index in 0..previous_count {
+            let mut new_subset = result[index].clone();
             new_subset.push(num);
-            new_subsets.push(new_subset);
+            result.push(new_subset);
         }
-        result.extend(new_subsets);
     }
-    
+
     result
 }
 
