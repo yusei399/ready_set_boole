@@ -33,6 +33,31 @@ pub(crate) fn evaluate(formula: &str, variable_value: impl Fn(u8) -> Option<bool
     }
 }
 
+pub(crate) fn variable_index(variable: u8) -> usize {
+    usize::from(variable - b'A')
+}
+
+pub(crate) fn variables(formula: &str) -> Vec<u8> {
+    let mut present = [false; 26];
+    for variable in formula.bytes().filter(u8::is_ascii_uppercase) {
+        present[variable_index(variable)] = true;
+    }
+    (b'A'..=b'Z')
+        .filter(|&variable| present[variable_index(variable)])
+        .collect()
+}
+
+pub(crate) fn assignments(variables: &[u8]) -> impl Iterator<Item = [bool; 26]> + '_ {
+    (0..(1u32 << variables.len())).map(|row| {
+        let mut values = [false; 26];
+        // The last column changes on every row.
+        for (bit, &variable) in variables.iter().rev().enumerate() {
+            values[variable_index(variable)] = row & (1 << bit) != 0;
+        }
+        values
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
