@@ -1,70 +1,37 @@
 pub fn eval_formula(formula: &str) -> bool {
-    let mut stack = Vec::new();
-    
-    for token in formula.chars() {
-        match token {
-            '0' => stack.push(false),
-            '1' => stack.push(true),
-            '!' => {
-                if let Some(operand) = stack.pop() {
-                    stack.push(!operand);
-                } else {
-                    return false;
-                }
-            }
-            '|' => {
-                if stack.len() < 2 {
-                    return false;
-                }
-                let operand2 = stack.pop().unwrap();
-                let operand1 = stack.pop().unwrap();
-                stack.push(operand1 || operand2);
-            }
-            '&' => {
-                if stack.len() < 2 {
-                    return false;
-                }
-                let operand2 = stack.pop().unwrap();
-                let operand1 = stack.pop().unwrap();
-                stack.push(operand1 && operand2);
-            }
-            '>' => {
-                if stack.len() < 2 {
-                    return false;
-                }
-                let operand2 = stack.pop().unwrap();
-                let operand1 = stack.pop().unwrap();
-                stack.push(!operand1 || operand2);
-            }
-            '=' => {
-                if stack.len() < 2 {
-                    return false;
-                }
-                let operand2 = stack.pop().unwrap();
-                let operand1 = stack.pop().unwrap();
-                stack.push(operand1 == operand2);
-            }
-            '^' => {
-                if stack.len() < 2 {
-                    return false;
-                }
-                let operand2 = stack.pop().unwrap();
-                let operand1 = stack.pop().unwrap();
-                stack.push(operand1 != operand2);
-            }
-            _ => {
-                return false;
-            }
-        }
-    }
-    if stack.len() == 1 {
-        stack.pop().unwrap()
-    } else {
-        false
-    }
+    evaluate(formula, |_| None).unwrap_or(false)
 }
 
-
+pub(crate) fn evaluate(formula: &str, variable_value: impl Fn(u8) -> Option<bool>) -> Option<bool> {
+    let mut stack = Vec::<bool>::new();
+    for token in formula.bytes() {
+        let value = match token {
+            b'0' => false,
+            b'1' => true,
+            b'A'..=b'Z' => variable_value(token)?,
+            b'!' => !stack.pop()?,
+            b'&' | b'|' | b'^' | b'>' | b'=' => {
+                let right = stack.pop()?;
+                let left = stack.pop()?;
+                match token {
+                    b'&' => left && right,
+                    b'|' => left || right,
+                    b'^' => left != right,
+                    b'>' => !left || right,
+                    b'=' => left == right,
+                    _ => unreachable!(),
+                }
+            }
+            _ => return None,
+        };
+        stack.push(value);
+    }
+    if stack.len() == 1 {
+        stack.pop()
+    } else {
+        None
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -88,22 +55,22 @@ mod tests {
     fn test_and() {
         // 論理積 (AND)
         assert_eq!(eval_formula("10&"), false); // 1 AND 0
-        assert_eq!(eval_formula("11&"), true);  // 1 AND 1
+        assert_eq!(eval_formula("11&"), true); // 1 AND 1
         assert_eq!(eval_formula("00&"), false); // 0 AND 0
     }
 
     #[test]
     fn test_or() {
         // 論理和 (OR)
-        assert_eq!(eval_formula("10|"), true);  // 1 OR 0
+        assert_eq!(eval_formula("10|"), true); // 1 OR 0
         assert_eq!(eval_formula("00|"), false); // 0 OR 0
-        assert_eq!(eval_formula("11|"), true);  // 1 OR 1
+        assert_eq!(eval_formula("11|"), true); // 1 OR 1
     }
 
     #[test]
     fn test_xor() {
         // 排他的論理和 (XOR)
-        assert_eq!(eval_formula("10^"), true);  // 1 XOR 0
+        assert_eq!(eval_formula("10^"), true); // 1 XOR 0
         assert_eq!(eval_formula("11^"), false); // 1 XOR 1
         assert_eq!(eval_formula("00^"), false); // 0 XOR 0
     }
@@ -113,23 +80,23 @@ mod tests {
         // 含意 (>)
         // A > B は「¬A ∨ B」として評価
         assert_eq!(eval_formula("10>"), false); // 1 implies 0 → false
-        assert_eq!(eval_formula("11>"), true);  // 1 implies 1 → true
-        assert_eq!(eval_formula("00>"), true);  // 0 implies 0 → true
-        assert_eq!(eval_formula("01>"), true);  // 0 implies 1 → true
+        assert_eq!(eval_formula("11>"), true); // 1 implies 1 → true
+        assert_eq!(eval_formula("00>"), true); // 0 implies 0 → true
+        assert_eq!(eval_formula("01>"), true); // 0 implies 1 → true
     }
 
     #[test]
     fn test_equivalence() {
         // 同値 (=)
-        assert_eq!(eval_formula("11="), true);  // 1 equals 1
+        assert_eq!(eval_formula("11="), true); // 1 equals 1
         assert_eq!(eval_formula("10="), false); // 1 equals 0
-        assert_eq!(eval_formula("00="), true);  // 0 equals 0
+        assert_eq!(eval_formula("00="), true); // 0 equals 0
     }
 
     #[test]
     fn test_complex_expression() {
         // 複合的な式：例として "1011||=" のテスト
-        // 1 0 1 1 || = → (1 ∨ 0) = (1 ∨ 1) → (true) = (true) → true
+        // 1 0 1 1 | | = → 1 = (0 ∨ (1 ∨ 1)) → true
         assert_eq!(eval_formula("1011||="), true);
     }
 
@@ -142,10 +109,3 @@ mod tests {
         assert_eq!(eval_formula("0!!"), false);
     }
 }
-
-// fn main() {
-//     // サンプルとしていくつかの結果を表示
-//     println!("eval_formula(\"10&\") = {}", eval_formula("10&")); // false
-//     println!("eval_formula(\"10|\") = {}", eval_formula("10|")); // true
-//     println!("eval_formula(\"1011||=\") = {}", eval_formula("1011||=")); // true
-// }
