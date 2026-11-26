@@ -1,163 +1,215 @@
+use super::negation_normal_form::negation_normal_form;
+use std::collections::VecDeque;
 
-#[derive(Debug, Clone)]
-enum Expr {
-    Var(String),
-    Const(bool),
-    Not(Box<Expr>),
-    And(Box<Expr>, Box<Expr>),
-    Or(Box<Expr>, Box<Expr>),
+#[derive(Clone, Copy)]
+struct Literal {
+    symbol: char,
+    negated: bool,
 }
 
-/// RPN 文字列を AST にパース
-fn parse_rpn(formula: &str) -> Option<Expr> {
-    let mut stack = Vec::new();
+type Clause = VecDeque<Literal>;
+type Clauses = VecDeque<Clause>;
+
+// Move the smaller side while preserving order. Deep left/right chains stay efficient.
+fn concatenate<T>(mut left: VecDeque<T>, mut right: VecDeque<T>) -> VecDeque<T> {
+    if left.len() >= right.len() {
+        left.append(&mut right);
+        left
+    } else {
+        while let Some(item) = left.pop_back() {
+            right.push_front(item);
+        }
+        right
+    }
+}
+
+// A CNF is a conjunction of clauses; each clause is a disjunction of literals.
+fn nnf_to_clauses(formula: &str) -> Option<Clauses> {
+    let mut stack: Vec<Clauses> = Vec::new();
     for ch in formula.chars() {
         match ch {
-            '0' => stack.push(Expr::Const(false)),
-            '1' => stack.push(Expr::Const(true)),
-            'A'..='Z' => stack.push(Expr::Var(ch.to_string())),
+            'A'..='Z' | '0' | '1' => {
+                let literal = Literal {
+                    symbol: ch,
+                    negated: false,
+                };
+                stack.push(VecDeque::from([VecDeque::from([literal])]));
+            }
             '!' => {
-                let expr = stack.pop()?;
-                stack.push(Expr::Not(Box::new(expr)));
+                let clauses = stack.last_mut()?;
+                if clauses.len() != 1 || clauses[0].len() != 1 {
+                    return None;
+                }
+                clauses[0][0].negated = !clauses[0][0].negated;
             }
             '&' => {
                 let right = stack.pop()?;
                 let left = stack.pop()?;
-                stack.push(Expr::And(Box::new(left), Box::new(right)));
+                stack.push(concatenate(left, right));
             }
             '|' => {
-                let right = stack.pop()?;
-                let left = stack.pop()?;
-                stack.push(Expr::Or(Box::new(left), Box::new(right)));
+                let mut right = stack.pop()?;
+                let mut left = stack.pop()?;
+                if left.len() == 1 && right.len() == 1 {
+                    // Plain OR chains need no distribution or repeated copying.
+                    let clause = concatenate(left.pop_front()?, right.pop_front()?);
+                    stack.push(VecDeque::from([clause]));
+                } else {
+                    // (AND_i L_i) OR (AND_j R_j) = AND_i,j (L_i OR R_j).
+                    let mut product = VecDeque::new();
+                    for left_clause in &left {
+                        for right_clause in &right {
+                            let mut clause = left_clause.clone();
+                            clause.extend(right_clause.iter().copied());
+                            product.push_back(clause);
+                        }
+                    }
+                    stack.push(product);
+                }
             }
             _ => return None,
         }
     }
     if stack.len() == 1 {
-        Some(stack.pop()?)
+        stack.pop()
     } else {
         None
     }
 }
 
-/// NNF 変換
-fn to_nnf(expr: Expr) -> Expr {
-    match expr {
-        Expr::Not(inner) => match *inner {
-            Expr::Not(e) => to_nnf(*e), // 二重否定
-            Expr::And(a, b) => {
-                // ¬(A ∧ B) → ¬A ∨ ¬B
-                Expr::Or(Box::new(to_nnf(Expr::Not(a))), Box::new(to_nnf(Expr::Not(b))))
-            }
-            Expr::Or(a, b) => {
-                // ¬(A ∨ B) → ¬A ∧ ¬B
-                Expr::And(Box::new(to_nnf(Expr::Not(a))), Box::new(to_nnf(Expr::Not(b))))
-            }
-            other => Expr::Not(Box::new(to_nnf(other))),
-        },
-        Expr::And(a, b) => Expr::And(Box::new(to_nnf(*a)), Box::new(to_nnf(*b))),
-        Expr::Or(a, b) => Expr::Or(Box::new(to_nnf(*a)), Box::new(to_nnf(*b))),
-        other => other,
-    }
-}
-
-/// OR 分配則を適用して CNF にする
-fn distribute_or(expr: Expr) -> Expr {
-    match expr {
-        Expr::Or(a, b) => {
-            let a = distribute_or(*a);
-            let b = distribute_or(*b);
-            match (a, b) {
-                (Expr::And(a1, a2), b) => Expr::And(
-                    Box::new(distribute_or(Expr::Or(a1, Box::new(b.clone())))),
-                    Box::new(distribute_or(Expr::Or(a2, Box::new(b)))),
-                ),
-                (a, Expr::And(b1, b2)) => Expr::And(
-                    Box::new(distribute_or(Expr::Or(Box::new(a.clone()), b1))),
-                    Box::new(distribute_or(Expr::Or(Box::new(a), b2))),
-                ),
-                (a, b) => Expr::Or(Box::new(a), Box::new(b)),
+fn write_cnf(clauses: &Clauses) -> String {
+    let mut result = String::new();
+    for clause in clauses {
+        for literal in clause {
+            result.push(literal.symbol);
+            if literal.negated {
+                result.push('!');
             }
         }
-        Expr::And(a, b) => Expr::And(Box::new(distribute_or(*a)), Box::new(distribute_or(*b))),
-        Expr::Not(e) => Expr::Not(Box::new(distribute_or(*e))),
-        other => other,
-    }
-}
-
-/// AND チェーンをフラット化する
-fn flatten_and(expr: &Expr) -> Vec<Expr> {
-    match expr {
-        Expr::And(a, b) => {
-            let mut left = flatten_and(a);
-            let mut right = flatten_and(b);
-            left.append(&mut right);
-            left
-        }
-        _ => vec![expr.clone()],
-    }
-}
-
-/// OR チェーンをフラット化する
-fn flatten_or(expr: &Expr) -> Vec<Expr> {
-    match expr {
-        Expr::Or(a, b) => {
-            let mut left = flatten_or(a);
-            let mut right = flatten_or(b);
-            left.append(&mut right);
-            left
-        }
-        _ => vec![expr.clone()],
-    }
-}
-
-/// AST を RPN 表記の文字列に変換,
-// AND と OR はフラット化して出力する。
-fn to_rpn(expr: &Expr) -> String {
-    match expr {
-        Expr::Var(s) => s.clone(),
-        Expr::Const(true) => "1".to_string(),
-        Expr::Const(false) => "0".to_string(),
-        Expr::Not(e) => format!("{}!", to_rpn(e)),
-        Expr::And(_, _) => {
-            let operands = flatten_and(expr);
-            let mut rpn = String::new();
-            for op in &operands {
-                rpn.push_str(&to_rpn(op));
-            }
-            for _ in 0..(operands.len() - 1) {
-                rpn.push('&');
-            }
-            rpn
-        }
-        Expr::Or(_, _) => {
-            let operands = flatten_or(expr);
-            let mut rpn = String::new();
-            for op in &operands {
-                rpn.push_str(&to_rpn(op));
-            }
-            for _ in 0..(operands.len() - 1) {
-                rpn.push('|');
-            }
-            rpn
+        for _ in 1..clause.len() {
+            result.push('|');
         }
     }
+    // The subject requires every conjunction at the end of the RPN output.
+    for _ in 1..clauses.len() {
+        result.push('&');
+    }
+    result
 }
 
-/// 入力の RPN 式（入力は NNF 状態である）を CNF に変換し、RPN 表記の文字列として返す。
+/// 全演算子を含む RPN 式を NNF、節のリストの順に変換し、CNF を返す。
 pub fn conjunctive_normal_form(formula: &str) -> String {
-    if let Some(ast) = parse_rpn(formula) {
-        let nnf_ast = to_nnf(ast);
-        let cnf_ast = distribute_or(nnf_ast);
-        to_rpn(&cnf_ast)
-    } else {
-        "Error: invalid formula".to_string()
+    let nnf = negation_normal_form(formula);
+    match nnf_to_clauses(&nnf) {
+        Some(clauses) => write_cnf(&clauses),
+        None => "Error: invalid formula".to_string(),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_deep_negations_and_binary_chains_do_not_overflow_the_stack() {
+        let depth = 10_000;
+        let negations = format!("A{}", "!".repeat(depth));
+        assert_eq!(conjunctive_normal_form(&negations), "A");
+        assert_eq!(conjunctive_normal_form(&(negations + "!")), "A!");
+
+        for operator in ['&', '|'] {
+            let mut left_chain = String::from("A");
+            for _ in 1..depth {
+                left_chain.push('A');
+                left_chain.push(operator);
+            }
+            let right_chain = format!(
+                "{}{}",
+                "A".repeat(depth),
+                operator.to_string().repeat(depth - 1),
+            );
+            for formula in [left_chain, right_chain.clone()] {
+                assert_eq!(conjunctive_normal_form(&formula), right_chain);
+                let negated = conjunctive_normal_form(&(formula + "!"));
+                assert!(evaluate(&negated, &['A'], 0));
+                assert!(!evaluate(&negated, &['A'], 1));
+            }
+        }
+    }
+
+    // A separate Boolean evaluator checks meaning without relying on the rewrite passes.
+    fn evaluate(formula: &str, variables: &[char], values: usize) -> bool {
+        let mut stack = Vec::new();
+        for ch in formula.chars() {
+            match ch {
+                'A'..='Z' => {
+                    let index = variables
+                        .iter()
+                        .position(|&variable| variable == ch)
+                        .unwrap();
+                    stack.push(values & (1 << index) != 0);
+                }
+                '!' => {
+                    let value = stack.pop().unwrap();
+                    stack.push(!value);
+                }
+                '&' | '|' | '^' | '>' | '=' => {
+                    let right = stack.pop().unwrap();
+                    let left = stack.pop().unwrap();
+                    stack.push(match ch {
+                        '&' => left && right,
+                        '|' => left || right,
+                        '^' => left != right,
+                        '>' => !left || right,
+                        '=' => left == right,
+                        _ => unreachable!(),
+                    });
+                }
+                _ => panic!("invalid output symbol: {}", ch),
+            }
+        }
+        assert_eq!(stack.len(), 1, "invalid RPN: {}", formula);
+        stack[0]
+    }
+
+    #[test]
+    fn test_all_operators_distribution_and_cnf_shape() {
+        let formulas = [
+            "A", "Z", "A!!", "AB>", "AB=", "AB^", "AB>!", "AB=!", "AB^!", "AB&C|", "AB&CD&|",
+            "ABCD&|&", "AB|CD|&", "AB>C^!", "AB=CD^>!", "AB^CD=^!",
+        ];
+        for formula in formulas {
+            let result = conjunctive_normal_form(formula);
+            let chars: Vec<char> = result.chars().collect();
+            let mut conjunctions_started = false;
+            for (index, &ch) in chars.iter().enumerate() {
+                assert!(ch.is_ascii_uppercase() || matches!(ch, '!' | '&' | '|'));
+                if ch == '!' {
+                    assert!(index > 0 && chars[index - 1].is_ascii_uppercase());
+                }
+                if ch == '&' {
+                    conjunctions_started = true;
+                }
+                if conjunctions_started {
+                    assert_eq!(ch, '&', "all conjunctions must be at the end: {}", result);
+                }
+            }
+            let mut variables: Vec<char> =
+                formula.chars().filter(char::is_ascii_uppercase).collect();
+            variables.sort_unstable();
+            variables.dedup();
+            for values in 0..(1 << variables.len()) {
+                assert_eq!(
+                    evaluate(formula, &variables, values),
+                    evaluate(&result, &variables, values),
+                    "{} -> {} with assignment {}",
+                    formula,
+                    result,
+                    values,
+                );
+            }
+        }
+    }
 
     #[test]
     fn test_conjunctive_normal_form_ab_and_not() {

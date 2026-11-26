@@ -1,6 +1,8 @@
+/// Returns all 2^n subsets. For n > 0, explicit subset vectors contain
+/// n * 2^(n - 1) integer entries in total, in addition to vector overhead.
 pub fn powerset(set: Vec<i32>) -> Vec<Vec<i32>> {
     let mut result = vec![vec![]];
-    
+
     for num in set {
         let mut new_subsets = Vec::new();
         for subset in result.iter() {
@@ -10,7 +12,7 @@ pub fn powerset(set: Vec<i32>) -> Vec<Vec<i32>> {
         }
         result.extend(new_subsets);
     }
-    
+
     result
 }
 
@@ -57,6 +59,19 @@ mod tests {
             vec![1, 2, 3],
         ];
         assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn test_powerset_signed_integer_extremes() {
+        assert_eq!(
+            powerset(vec![i32::MIN, i32::MAX]),
+            vec![
+                vec![],
+                vec![i32::MIN],
+                vec![i32::MAX],
+                vec![i32::MIN, i32::MAX]
+            ]
+        );
     }
 }
 

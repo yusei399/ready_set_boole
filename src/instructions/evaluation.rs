@@ -1,6 +1,6 @@
 pub fn eval_formula(formula: &str) -> bool {
     let mut stack = Vec::new();
-    
+
     for token in formula.chars() {
         match token {
             '0' => stack.push(false),
@@ -64,8 +64,6 @@ pub fn eval_formula(formula: &str) -> bool {
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -88,22 +86,22 @@ mod tests {
     fn test_and() {
         // 論理積 (AND)
         assert_eq!(eval_formula("10&"), false); // 1 AND 0
-        assert_eq!(eval_formula("11&"), true);  // 1 AND 1
+        assert_eq!(eval_formula("11&"), true); // 1 AND 1
         assert_eq!(eval_formula("00&"), false); // 0 AND 0
     }
 
     #[test]
     fn test_or() {
         // 論理和 (OR)
-        assert_eq!(eval_formula("10|"), true);  // 1 OR 0
+        assert_eq!(eval_formula("10|"), true); // 1 OR 0
         assert_eq!(eval_formula("00|"), false); // 0 OR 0
-        assert_eq!(eval_formula("11|"), true);  // 1 OR 1
+        assert_eq!(eval_formula("11|"), true); // 1 OR 1
     }
 
     #[test]
     fn test_xor() {
         // 排他的論理和 (XOR)
-        assert_eq!(eval_formula("10^"), true);  // 1 XOR 0
+        assert_eq!(eval_formula("10^"), true); // 1 XOR 0
         assert_eq!(eval_formula("11^"), false); // 1 XOR 1
         assert_eq!(eval_formula("00^"), false); // 0 XOR 0
     }
@@ -113,23 +111,23 @@ mod tests {
         // 含意 (>)
         // A > B は「¬A ∨ B」として評価
         assert_eq!(eval_formula("10>"), false); // 1 implies 0 → false
-        assert_eq!(eval_formula("11>"), true);  // 1 implies 1 → true
-        assert_eq!(eval_formula("00>"), true);  // 0 implies 0 → true
-        assert_eq!(eval_formula("01>"), true);  // 0 implies 1 → true
+        assert_eq!(eval_formula("11>"), true); // 1 implies 1 → true
+        assert_eq!(eval_formula("00>"), true); // 0 implies 0 → true
+        assert_eq!(eval_formula("01>"), true); // 0 implies 1 → true
     }
 
     #[test]
     fn test_equivalence() {
         // 同値 (=)
-        assert_eq!(eval_formula("11="), true);  // 1 equals 1
+        assert_eq!(eval_formula("11="), true); // 1 equals 1
         assert_eq!(eval_formula("10="), false); // 1 equals 0
-        assert_eq!(eval_formula("00="), true);  // 0 equals 0
+        assert_eq!(eval_formula("00="), true); // 0 equals 0
     }
 
     #[test]
     fn test_complex_expression() {
         // 複合的な式：例として "1011||=" のテスト
-        // 1 0 1 1 || = → (1 ∨ 0) = (1 ∨ 1) → (true) = (true) → true
+        // 1 0 1 1 | | = → 1 = (0 ∨ (1 ∨ 1)) → true = true → true
         assert_eq!(eval_formula("1011||="), true);
     }
 
@@ -140,6 +138,35 @@ mod tests {
         assert_eq!(eval_formula("1!!"), true);
         // 式: "0!!" も同様
         assert_eq!(eval_formula("0!!"), false);
+    }
+
+    #[test]
+    fn every_binary_operator_matches_its_truth_table() {
+        let operators = [
+            ('&', [false, false, false, true]),
+            ('|', [false, true, true, true]),
+            ('^', [false, true, true, false]),
+            ('>', [true, true, false, true]),
+            ('=', [true, false, false, true]),
+        ];
+        for (operator, expected) in operators {
+            for left in 0..=1 {
+                for right in 0..=1 {
+                    let formula = format!("{left}{right}{operator}");
+                    assert_eq!(
+                        eval_formula(&formula),
+                        expected[2 * left + right],
+                        "{formula}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn evaluates_long_valid_formula_without_recursive_stack_growth() {
+        let formula = "1".repeat(10_000) + &"&".repeat(9_999);
+        assert!(eval_formula(&formula));
     }
 }
 
