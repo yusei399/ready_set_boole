@@ -1,5 +1,5 @@
 pub mod adder;
-pub mod multiplier;
-pub mod gray_code;
 pub mod evaluation;
+pub mod gray_code;
+pub mod multiplier;
 pub mod truth_table;

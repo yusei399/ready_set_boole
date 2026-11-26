@@ -1,118 +1,153 @@
 pub fn sat(formula: &str) -> bool {
-    let mut stack = Vec::new();
-    
-    for ch in formula.chars() {
-        match ch {
-            '0' => stack.push(false),
-            '1' => stack.push(true),
-            'A'..='Z' => stack.push(true),
-            '!' => {
-                let val = stack.pop().expect("Not enough operands for '!'");
-                stack.push(!val);
+    let symbols: Vec<char> = formula.chars().collect();
+    let mut variable_bits = [0u32; 26];
+    let mut variable_count = 0;
+
+    // Repeated occurrences of a variable share one assignment bit. Compact
+    // indices also ensure that a lone Z needs only two assignments, not 2^26.
+    for &symbol in &symbols {
+        if symbol.is_ascii_uppercase() {
+            let index = (symbol as u8 - b'A') as usize;
+            if variable_bits[index] == 0 {
+                variable_bits[index] = 1u32 << variable_count;
+                variable_count += 1;
             }
-            '&' => {
-                let b = stack.pop().expect("Not enough operands for '&'");
-                let a = stack.pop().expect("Not enough operands for '&'");
-                stack.push(a && b);
-            }
-            '|' => {
-                let b = stack.pop().expect("Not enough operands for '|'");
-                let a = stack.pop().expect("Not enough operands for '|'");
-                stack.push(a || b);
-            }
-            '^' => {
-                let b = stack.pop().expect("Not enough operands for '^'");
-                let a = stack.pop().expect("Not enough operands for '^'");
-                stack.push(a != b);
-            }
-            _ => (),
         }
     }
-    
-    stack.pop().expect("Formula is invalid")
-}
 
+    let mut stack = Vec::with_capacity(symbols.len());
+    for assignment in 0..(1u32 << variable_count) {
+        stack.clear();
+        for &symbol in &symbols {
+            match symbol {
+                '0' => stack.push(false),
+                '1' => stack.push(true),
+                'A'..='Z' => {
+                    let index = (symbol as u8 - b'A') as usize;
+                    stack.push(assignment & variable_bits[index] != 0);
+                }
+                '!' => {
+                    let value = stack.pop().expect("Not enough operands for '!'");
+                    stack.push(!value);
+                }
+                '&' | '|' | '^' | '>' | '=' => {
+                    // The first popped operand is the right-hand side in RPN.
+                    let right = stack
+                        .pop()
+                        .expect("Not enough operands for binary operator");
+                    let left = stack
+                        .pop()
+                        .expect("Not enough operands for binary operator");
+                    let value = match symbol {
+                        '&' => left && right,
+                        '|' => left || right,
+                        '^' => left ^ right,
+                        '>' => !left || right,
+                        '=' => left == right,
+                        _ => unreachable!(),
+                    };
+                    stack.push(value);
+                }
+                _ => panic!("Invalid symbol in formula: {symbol}"),
+            }
+        }
+
+        assert_eq!(stack.len(), 1, "Formula is invalid");
+        if stack[0] {
+            return true;
+        }
+    }
+    false
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_sat_literals() {
-        // 単一リテラル
-        assert_eq!(sat("1"), true);
-        assert_eq!(sat("0"), false);
+    fn subject_examples() {
+        assert!(sat("AB|"));
+        assert!(sat("AB&"));
+        assert!(!sat("AA!&"));
+        assert!(!sat("AA^"));
     }
 
     #[test]
-    fn test_sat_variables() {
-        // 変数は常に true とみなす
-        assert_eq!(sat("A"), true);
-        // A OR B → true OR true = true
-        assert_eq!(sat("AB|"), true);
-        // A AND B → true AND true = true
-        assert_eq!(sat("AB&"), true);
+    fn finds_assignments_other_than_all_true() {
+        assert!(sat("A!"));
+        assert!(sat("AB^"));
+        assert!(sat("AB!&"));
+        assert!(sat("AB|!"));
+        assert!(!sat("AA!&"));
     }
 
     #[test]
-    fn test_sat_xor() {
-        // "AA^" → true XOR true = false
-        assert_eq!(sat("AA^"), false);
-        // "AB^" → true XOR true = false (変数は常に true)
-        assert_eq!(sat("AB^"), false);
+    fn implication_and_equivalence_are_evaluated() {
+        assert!(!sat("A!A="));
+        assert!(!sat("A!A!>!"));
+        assert!(!sat("AB>AB!&&"));
+        assert!(sat("BA>AB!&&"));
+        assert!(sat("AB="));
+        assert!(sat("AB=!"));
     }
 
     #[test]
-    fn test_sat_complex() {
-        // "AA!&" → push A (true), push A (true), then '!' makes true→false,
-        // そして AND: true AND false = false
-        assert_eq!(sat("AA!&"), false);
-    }
-    #[test]
-    fn test_sat_literal_true() {
-        // 単一のリテラル "1" は true を返す
-        assert_eq!(sat("1"), true);
+    fn repeated_and_nonconsecutive_variables_share_assignments() {
+        assert!(sat("Z!"));
+        assert!(sat("AZ^"));
+        assert!(!sat("ZZ^"));
+        assert!(!sat("AZ^AZ=&"));
     }
 
     #[test]
-    fn test_sat_literal_false() {
-        // 単一のリテラル "0" は false を返す
-        assert_eq!(sat("0"), false);
-    }
-
-
-    #[test]
-    fn test_sat_and() {
-        // "11&" は true AND true → true
-        // "10&" は true AND false → false
-        assert_eq!(sat("11&"), true);
-        assert_eq!(sat("10&"), false);
+    fn accepts_all_26_distinct_variables() {
+        // A disjunction is satisfiable quickly, while exercising all 26 bits.
+        let formula = format!("ABCDEFGHIJKLMNOPQRSTUVWXYZ{}", "|".repeat(25));
+        assert!(sat(&formula));
     }
 
     #[test]
-    fn test_sat_or() {
-        // "10|" は true OR false → true
-        // "00|" は false OR false → false
-        assert_eq!(sat("10|"), true);
-        assert_eq!(sat("00|"), false);
+    fn preserves_literal_support_used_by_main() {
+        assert!(sat("1"));
+        assert!(!sat("0"));
+        assert!(sat("0!"));
+        assert!(!sat("1!"));
+        assert!(sat("101|&"));
     }
 
     #[test]
-    fn test_sat_complex_expression() {
-        // 例: "101|&" → 0 OR 1 → true, その後 1 AND true → true
-        assert_eq!(sat("101|&"), true);
+    fn matches_independently_constructed_truth_masks() {
+        // Each mask describes the four assignments 00, 01, 10, 11. Construct
+        // formulas and their truth tables together; do not reuse the parser.
+        let mut by_length = vec![
+            Vec::<(String, u8)>::new(),
+            vec![("A".into(), 0b1100), ("B".into(), 0b1010)],
+        ];
+        for length in 2..=7 {
+            let mut next = Vec::new();
+            for (formula, mask) in &by_length[length - 1] {
+                next.push((format!("{formula}!"), mask ^ 0b1111));
+            }
+            for left_length in 1..length - 1 {
+                let right_length = length - 1 - left_length;
+                for (left, left_mask) in &by_length[left_length] {
+                    for (right, right_mask) in &by_length[right_length] {
+                        for (operator, mask) in [
+                            ('&', left_mask & right_mask),
+                            ('|', left_mask | right_mask),
+                            ('^', left_mask ^ right_mask),
+                            ('>', (left_mask ^ 0b1111) | right_mask),
+                            ('=', (left_mask ^ right_mask) ^ 0b1111),
+                        ] {
+                            next.push((format!("{left}{right}{operator}"), mask));
+                        }
+                    }
+                }
+            }
+            by_length.push(next);
+        }
+        for (formula, mask) in by_length.iter().flatten() {
+            assert_eq!(sat(formula), *mask != 0, "formula: {formula}");
+        }
     }
 }
-
-// fn main() {
-//     println!("SAT Evaluation Tests (manual):");
-//     println!("sat(\"1\") = {}", sat("1"));         // true
-//     println!("sat(\"0\") = {}", sat("0"));         // false
-//     println!("sat(\"1!\") = {}", sat("1!"));       // false
-//     println!("sat(\"0!\") = {}", sat("0!"));       // true
-//     println!("sat(\"11&\") = {}", sat("11&"));     // true
-//     println!("sat(\"10&\") = {}", sat("10&"));     // false
-//     println!("sat(\"10|\") = {}", sat("10|"));     // true
-//     println!("sat(\"00|\") = {}", sat("00|"));     // false
-//     println!("sat(\"101|&\") = {}", sat("101|&")); // true
-// }

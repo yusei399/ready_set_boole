@@ -1,143 +1,223 @@
-#[derive(Debug, Clone)]
-enum Expr {
-    Var(String),
-    Const(bool),
-    Not(Box<Expr>),
-    And(Box<Expr>, Box<Expr>),
-    Or(Box<Expr>, Box<Expr>),
-    Imp(Box<Expr>, Box<Expr>),
-    Equ(Box<Expr>, Box<Expr>),
+#[derive(Clone, Copy)]
+enum Node {
+    Variable(char),
+    Constant(bool),
+    Not(usize),
+    Binary {
+        operator: char,
+        left: usize,
+        right: usize,
+    },
 }
 
-fn parse_rpn(formula: &str) -> Option<Expr> {
+// Child indices keep parsing and dropping deep formulas off the call stack.
+fn parse_rpn(formula: &str) -> Option<(Vec<Node>, usize)> {
+    let mut nodes = Vec::new();
     let mut stack = Vec::new();
     for ch in formula.chars() {
-        match ch {
-            '0' => stack.push(Expr::Const(false)),
-            '1' => stack.push(Expr::Const(true)),
-            'A'..='Z' => stack.push(Expr::Var(ch.to_string())),
-            '!' => {
-                let expr = stack.pop()?;
-                stack.push(Expr::Not(Box::new(expr)));
-            }
-            '&' => {
+        let node = match ch {
+            'A'..='Z' => Node::Variable(ch),
+            '0' | '1' => Node::Constant(ch == '1'),
+            '!' => Node::Not(stack.pop()?),
+            '&' | '|' | '^' | '>' | '=' => {
                 let right = stack.pop()?;
                 let left = stack.pop()?;
-                stack.push(Expr::And(Box::new(left), Box::new(right)));
-            }
-            '|' => {
-                let right = stack.pop()?;
-                let left = stack.pop()?;
-                stack.push(Expr::Or(Box::new(left), Box::new(right)));
-            }
-            '>' => {
-                let right = stack.pop()?;
-                let left = stack.pop()?;
-                stack.push(Expr::Imp(Box::new(left), Box::new(right)));
-            }
-            '=' => {
-                let right = stack.pop()?;
-                let left = stack.pop()?;
-                stack.push(Expr::Equ(Box::new(left), Box::new(right)));
+                Node::Binary {
+                    operator: ch,
+                    left,
+                    right,
+                }
             }
             _ => return None,
-        }
+        };
+        nodes.push(node);
+        stack.push(nodes.len() - 1);
     }
     if stack.len() == 1 {
-        Some(stack.pop()?)
+        Some((nodes, stack.pop()?))
     } else {
         None
     }
 }
 
-fn eliminate_implications(expr: Expr) -> Expr {
-    match expr {
-        Expr::Imp(a, b) => {
-            // A > B  => ¬A ∨ B
-            Expr::Or(
-                Box::new(Expr::Not(Box::new(eliminate_implications(*a)))),
-                Box::new(eliminate_implications(*b)),
-            )
+enum Task {
+    Visit(usize, bool),
+    Emit(char),
+}
+
+// Carry the requested polarity instead of cloning and recursively rewriting subtrees.
+fn write_nnf(nodes: &[Node], root: usize) -> String {
+    let mut result = String::new();
+    let mut tasks = vec![Task::Visit(root, false)];
+    while let Some(task) = tasks.pop() {
+        match task {
+            Task::Emit(operator) => result.push(operator),
+            Task::Visit(index, negated) => match nodes[index] {
+                Node::Variable(variable) => {
+                    result.push(variable);
+                    if negated {
+                        result.push('!');
+                    }
+                }
+                Node::Constant(value) => result.push(if value != negated { '1' } else { '0' }),
+                Node::Not(child) => tasks.push(Task::Visit(child, !negated)),
+                Node::Binary {
+                    operator,
+                    left,
+                    right,
+                } => match operator {
+                    '&' | '|' => {
+                        let output_operator = if negated {
+                            if operator == '&' {
+                                '|'
+                            } else {
+                                '&'
+                            }
+                        } else {
+                            operator
+                        };
+                        // The task stack is LIFO: visit left, then right, then emit.
+                        tasks.push(Task::Emit(output_operator));
+                        tasks.push(Task::Visit(right, negated));
+                        tasks.push(Task::Visit(left, negated));
+                    }
+                    '>' => {
+                        // A > B = !A | B; its negation is A & !B.
+                        tasks.push(Task::Emit(if negated { '&' } else { '|' }));
+                        tasks.push(Task::Visit(right, negated));
+                        tasks.push(Task::Visit(left, !negated));
+                    }
+                    '^' | '=' => {
+                        // XOR: (A | B) & (!A | !B).
+                        // Equivalence: (A & B) | (!A & !B).
+                        // Under negation, De Morgan swaps both operators and polarities.
+                        let inner = if (operator == '=') != negated {
+                            '&'
+                        } else {
+                            '|'
+                        };
+                        let outer = if inner == '&' { '|' } else { '&' };
+                        tasks.push(Task::Emit(outer));
+                        tasks.push(Task::Emit(inner));
+                        tasks.push(Task::Visit(right, !negated));
+                        tasks.push(Task::Visit(left, !negated));
+                        tasks.push(Task::Emit(inner));
+                        tasks.push(Task::Visit(right, negated));
+                        tasks.push(Task::Visit(left, negated));
+                    }
+                    _ => unreachable!(),
+                },
+            },
         }
-        Expr::Equ(a, b) => {
-            // A = B  => (A ∧ B) ∨ (¬A ∧ ¬B)
-            let a_e = eliminate_implications(*a);
-            let b_e = eliminate_implications(*b);
-            Expr::Or(
-                Box::new(Expr::And(Box::new(a_e.clone()), Box::new(b_e.clone()))),
-                Box::new(Expr::And(
-                    Box::new(Expr::Not(Box::new(a_e))),
-                    Box::new(Expr::Not(Box::new(b_e))),
-                )),
-            )
-        }
-        Expr::Not(inner) => Expr::Not(Box::new(eliminate_implications(*inner))),
-        Expr::And(a, b) => Expr::And(
-            Box::new(eliminate_implications(*a)),
-            Box::new(eliminate_implications(*b)),
-        ),
-        Expr::Or(a, b) => Expr::Or(
-            Box::new(eliminate_implications(*a)),
-            Box::new(eliminate_implications(*b)),
-        ),
-        other => other,
     }
+    result
 }
 
-/// NNF 変換
-fn to_nnf(expr: Expr) -> Expr {
-    match expr {
-        Expr::Not(inner) => match *inner {
-            Expr::Not(e) => to_nnf(*e), // 二重否定の除去
-            Expr::And(a, b) => {
-                // ¬(A ∧ B) → ¬A ∨ ¬B
-                Expr::Or(
-                    Box::new(to_nnf(Expr::Not(a))),
-                    Box::new(to_nnf(Expr::Not(b))),
-                )
-            }
-            Expr::Or(a, b) => {
-                // ¬(A ∨ B) → ¬A ∧ ¬B
-                Expr::And(
-                    Box::new(to_nnf(Expr::Not(a))),
-                    Box::new(to_nnf(Expr::Not(b))),
-                )
-            }
-            other => Expr::Not(Box::new(to_nnf(other))),
-        },
-        Expr::And(a, b) => Expr::And(Box::new(to_nnf(*a)), Box::new(to_nnf(*b))),
-        Expr::Or(a, b) => Expr::Or(Box::new(to_nnf(*a)), Box::new(to_nnf(*b))),
-        other => other,
-    }
-}
-
-/// AST を RPN 表記に変換する
-fn to_rpn(expr: &Expr) -> String {
-    match expr {
-        Expr::Var(s) => s.clone(),
-        Expr::Const(true) => "1".to_string(),
-        Expr::Const(false) => "0".to_string(),
-        Expr::Not(e) => format!("{}!", to_rpn(e)),
-        Expr::And(a, b) => format!("{}{}&", to_rpn(a), to_rpn(b)),
-        Expr::Or(a, b) => format!("{}{}|", to_rpn(a), to_rpn(b)),
-        _ => "".to_string(), // Imp, Equ should have been eliminated
-    }
-}
-
-/// RPN 式をNNFに変換し、RPN 表記で返す。
+/// RPN 式を NNF に変換する。深い式も明示的なスタックで処理する。
 pub fn negation_normal_form(formula: &str) -> String {
-    if let Some(parsed) = parse_rpn(formula) {
-        let no_imp = eliminate_implications(parsed);
-        let nnf = to_nnf(no_imp);
-        to_rpn(&nnf)
-    } else {
-        "Error: invalid formula".to_string()
+    match parse_rpn(formula) {
+        Some((nodes, root)) => write_nnf(&nodes, root),
+        None => "Error: invalid formula".to_string(),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_deep_negations_and_binary_chains_do_not_overflow_the_stack() {
+        let depth = 10_000;
+        let negations = format!("A{}", "!".repeat(depth));
+        assert_eq!(negation_normal_form(&negations), "A");
+        assert_eq!(negation_normal_form(&(negations + "!")), "A!");
+
+        for operator in ['&', '|'] {
+            let mut left_chain = String::from("A");
+            for _ in 1..depth {
+                left_chain.push('A');
+                left_chain.push(operator);
+            }
+            let right_chain = format!(
+                "{}{}",
+                "A".repeat(depth),
+                operator.to_string().repeat(depth - 1),
+            );
+            for formula in [left_chain, right_chain] {
+                assert_eq!(negation_normal_form(&formula), formula);
+                let negated = negation_normal_form(&(formula + "!"));
+                assert!(evaluate(&negated, &['A'], 0));
+                assert!(!evaluate(&negated, &['A'], 1));
+            }
+        }
+    }
+
+    // Evaluate the original and rewritten formulas independently of the AST passes.
+    fn evaluate(formula: &str, variables: &[char], values: usize) -> bool {
+        let mut stack = Vec::new();
+        for ch in formula.chars() {
+            match ch {
+                'A'..='Z' => {
+                    let index = variables
+                        .iter()
+                        .position(|&variable| variable == ch)
+                        .unwrap();
+                    stack.push(values & (1 << index) != 0);
+                }
+                '!' => {
+                    let value = stack.pop().unwrap();
+                    stack.push(!value);
+                }
+                '&' | '|' | '^' | '>' | '=' => {
+                    let right = stack.pop().unwrap();
+                    let left = stack.pop().unwrap();
+                    stack.push(match ch {
+                        '&' => left && right,
+                        '|' => left || right,
+                        '^' => left != right,
+                        '>' => !left || right,
+                        '=' => left == right,
+                        _ => unreachable!(),
+                    });
+                }
+                _ => panic!("invalid output symbol: {}", ch),
+            }
+        }
+        assert_eq!(stack.len(), 1, "invalid RPN: {}", formula);
+        stack[0]
+    }
+
+    #[test]
+    fn test_all_operators_preserve_truth_values_and_nnf_shape() {
+        let formulas = [
+            "A", "Z", "A!!", "A!!!", "AB^", "AB^!", "AB>!", "AB=!", "A!B!>!", "AB^C>", "AB>C^!",
+            "AB=CD^>!", "AB^CD=^!", "AB>CD>&!", "AB^CD^=",
+        ];
+        for formula in formulas {
+            let result = negation_normal_form(formula);
+            let chars: Vec<char> = result.chars().collect();
+            for (index, &ch) in chars.iter().enumerate() {
+                assert!(ch.is_ascii_uppercase() || matches!(ch, '!' | '&' | '|'));
+                if ch == '!' {
+                    assert!(index > 0 && chars[index - 1].is_ascii_uppercase());
+                }
+            }
+            let mut variables: Vec<char> =
+                formula.chars().filter(char::is_ascii_uppercase).collect();
+            variables.sort_unstable();
+            variables.dedup();
+            for values in 0..(1 << variables.len()) {
+                assert_eq!(
+                    evaluate(formula, &variables, values),
+                    evaluate(&result, &variables, values),
+                    "{} -> {} with assignment {}",
+                    formula,
+                    result,
+                    values,
+                );
+            }
+        }
+    }
 
     #[test]
     fn test_negation_normal_form_ab_and_not() {

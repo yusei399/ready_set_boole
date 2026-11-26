@@ -1,105 +1,170 @@
-pub fn eval_set(formula: &str, sets: Vec<Vec<i32>>) -> Vec<i32> {
-    let mut universe = Vec::new();
-    for s in &sets {
-        universe.extend(s.iter());
+pub fn eval_set(formula: &str, mut sets: Vec<Vec<i32>>) -> Vec<i32> {
+    for set in &mut sets {
+        set.sort_unstable();
+        set.dedup();
     }
-    universe.sort();
+    // All complements, including complements of intermediate results, use
+    // this same union of the input sets.
+    let mut universe: Vec<i32> = sets.iter().flatten().copied().collect();
+    universe.sort_unstable();
     universe.dedup();
-    
-    let mut stack = Vec::new();
-    
-    for ch in formula.chars() {
-        match ch {
+
+    let mut stack: Vec<Vec<i32>> = Vec::new();
+    for symbol in formula.chars() {
+        match symbol {
             'A'..='Z' => {
-                let idx = (ch as usize) - ('A' as usize);
-                if idx < sets.len() {
-                    stack.push(sets[idx].clone());
-                } else {
-                    stack.push(vec![]);
-                }
+                let index = (symbol as u8 - b'A') as usize;
+                stack.push(
+                    sets.get(index)
+                        .expect("Missing input set for variable")
+                        .clone(),
+                );
             }
             '!' => {
-                let set = stack.pop().unwrap();
-                let complement: Vec<i32> = universe
+                let set = stack.pop().expect("Not enough operands for '!'");
+                let complement = universe
                     .iter()
-                    .filter(|x| !set.contains(x))
-                    .cloned()
+                    .copied()
+                    .filter(|value| !set.contains(value))
                     .collect();
                 stack.push(complement);
             }
-            '&' => {
-                let b = stack.pop().unwrap();
-                let a = stack.pop().unwrap();
-                let intersection: Vec<i32> = a.into_iter().filter(|x| b.contains(x)).collect();
-                stack.push(intersection);
+            '&' | '|' | '^' | '>' | '=' => {
+                let right = stack
+                    .pop()
+                    .expect("Not enough operands for binary operator");
+                let left = stack
+                    .pop()
+                    .expect("Not enough operands for binary operator");
+                // Apply each Boolean operator to membership in the two sets.
+                // Iterating over U also includes elements in neither operand,
+                // which are needed for implication and equivalence.
+                let result = universe
+                    .iter()
+                    .copied()
+                    .filter(|value| {
+                        let in_left = left.contains(value);
+                        let in_right = right.contains(value);
+                        match symbol {
+                            '&' => in_left && in_right,
+                            '|' => in_left || in_right,
+                            '^' => in_left ^ in_right,
+                            '>' => !in_left || in_right,
+                            '=' => in_left == in_right,
+                            _ => unreachable!(),
+                        }
+                    })
+                    .collect();
+                stack.push(result);
             }
-            '|' => {
-                let b = stack.pop().unwrap();
-                let a = stack.pop().unwrap();
-                let mut union: Vec<i32> = a.into_iter().chain(b.into_iter()).collect();
-                union.sort();
-                union.dedup();
-                stack.push(union);
-            }
-            _ => (),
+            _ => panic!("Invalid symbol in formula: {symbol}"),
         }
     }
-    
+    assert_eq!(stack.len(), 1, "Formula is invalid");
     stack.pop().unwrap()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn sorted(mut v: Vec<i32>) -> Vec<i32> {
-        v.sort();
-        v
+
+    #[test]
+    fn subject_examples() {
+        assert_eq!(eval_set("AB&", vec![vec![0, 1, 2], vec![0, 3, 4]]), vec![0]);
+        assert_eq!(
+            eval_set("AB|", vec![vec![0, 1, 2], vec![3, 4, 5]]),
+            vec![0, 1, 2, 3, 4, 5]
+        );
+        assert_eq!(eval_set("A!", vec![vec![0, 1, 2]]), Vec::<i32>::new());
     }
 
     #[test]
-    fn test_eval_set_intersection() {
-        // A = [0,1,2], B = [0,3,4] なら A ∩ B = [0]
-        let sets = vec![vec![0, 1, 2], vec![0, 3, 4]];
-        let mut result = eval_set("AB&", sets);
-        result = sorted(result);
-        let expected = sorted(vec![0]);
-        assert_eq!(result, expected);
+    fn evaluates_xor_implication_and_equivalence() {
+        let sets = vec![vec![0, 1], vec![1, 2]];
+        assert_eq!(eval_set("AB^", sets.clone()), vec![0, 2]);
+        assert_eq!(eval_set("AB=", sets.clone()), vec![1]);
+        assert_eq!(eval_set("A!B>", sets.clone()), vec![0, 1, 2]);
+        assert_eq!(eval_set("AB!>", sets), vec![0, 2]);
     }
 
     #[test]
-    fn test_eval_set_union() {
-        // A = [0,1,2], B = [3,4,5] なら A ∪ B = [0,1,2,3,4,5]
-        let sets = vec![vec![0, 1, 2], vec![3, 4, 5]];
-        let mut result = eval_set("AB|", sets);
-        result = sorted(result);
-        let expected = sorted(vec![0, 1, 2, 3, 4, 5]);
-        assert_eq!(result, expected);
+    fn every_intermediate_complement_uses_the_global_universe() {
+        let sets = vec![vec![1], vec![2], vec![3]];
+        assert_eq!(eval_set("AB>CC!|&", sets.clone()), vec![2, 3]);
+        assert_eq!(eval_set("AB=CC!|&", sets), vec![3]);
+        assert_eq!(
+            eval_set("AB&C|!", vec![vec![1, 2], vec![2, 3], vec![4]]),
+            vec![1, 3]
+        );
     }
 
     #[test]
-    fn test_eval_set_complement() {
-        // "A!" は [0,1,2] の補集合  [0,1,2] → [] となる
-        let sets = vec![vec![0, 1, 2]];
-        let result = eval_set("A!", sets);
-        assert_eq!(sorted(result), sorted(vec![]));
+    fn empty_sets_and_signed_integer_extremes() {
+        assert!(eval_set("A", vec![vec![]]).is_empty());
+        assert!(eval_set("A!", vec![vec![]]).is_empty());
+        assert_eq!(eval_set("AB^", vec![vec![], vec![-1]]), vec![-1]);
+        assert_eq!(
+            eval_set("A!!", vec![vec![i32::MAX, -1, i32::MIN, 0]]),
+            vec![i32::MIN, -1, 0, i32::MAX]
+        );
+    }
+
+    #[test]
+    fn all_26_sets_are_addressable() {
+        let sets: Vec<Vec<i32>> = (0..26).map(|value| vec![value]).collect();
+        let union = format!("ABCDEFGHIJKLMNOPQRSTUVWXYZ{}", "|".repeat(25));
+        assert_eq!(
+            eval_set(&union, sets.clone()),
+            (0..26).collect::<Vec<i32>>()
+        );
+        assert!(eval_set(&format!("{union}!"), sets).is_empty());
+    }
+
+    #[test]
+    fn binary_operators_match_independent_membership_truth_tables() {
+        let domain = [-2, 0, 5];
+        for left_bits in 0..8 {
+            for right_bits in 0..8 {
+                let left: Vec<i32> = domain
+                    .iter()
+                    .enumerate()
+                    .filter(|(index, _)| left_bits & (1 << index) != 0)
+                    .map(|(_, value)| *value)
+                    .collect();
+                let right: Vec<i32> = domain
+                    .iter()
+                    .enumerate()
+                    .filter(|(index, _)| right_bits & (1 << index) != 0)
+                    .map(|(_, value)| *value)
+                    .collect();
+                // Truth-table bits correspond to (left, right) = 00,01,10,11.
+                for (operator, truth_table) in [
+                    ('&', 0b1000),
+                    ('|', 0b1110),
+                    ('^', 0b0110),
+                    ('>', 0b1011),
+                    ('=', 0b1001),
+                ] {
+                    let expected: Vec<i32> = domain
+                        .iter()
+                        .copied()
+                        .filter(|value| {
+                            let row = 2 * usize::from(left.contains(value))
+                                + usize::from(right.contains(value));
+                            truth_table & (1 << row) != 0
+                        })
+                        .collect();
+                    // C supplies the full universe, including elements absent
+                    // from both A and B; C OR NOT C is the universal set.
+                    let formula = format!("AB{operator}CC!|&");
+                    let actual =
+                        eval_set(&formula, vec![left.clone(), right.clone(), domain.to_vec()]);
+                    assert_eq!(
+                        actual, expected,
+                        "formula: {formula}; A={left:?}; B={right:?}"
+                    );
+                }
+            }
+        }
     }
 }
-
-// fn main() {
-//     println!("--- eval_set Tests in main() ---");
-
-//     // Test 1: Intersection
-//     let sets1 = vec![vec![0, 1, 2], vec![0, 3, 4]];
-//     let result1 = eval_set("AB&", sets1.clone());
-//     println!("Formula: \"AB&\", Sets: {:?} => Result: {:?}", sets1, result1);
-
-//     // Test 2: Union
-//     let sets2 = vec![vec![0, 1, 2], vec![3, 4, 5]];
-//     let result2 = eval_set("AB|", sets2.clone());
-//     println!("Formula: \"AB|\", Sets: {:?} => Result: {:?}", sets2, result2);
-
-//     // Test 3: Complement
-//     let sets3 = vec![vec![0, 1, 2]];
-//     let result3 = eval_set("A!", sets3.clone());
-//     println!("Formula: \"A!\", Sets: {:?} => Result (length={}): {:?}", sets3, result3.len(), result3);
-// }
